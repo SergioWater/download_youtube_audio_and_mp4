@@ -1,0 +1,32 @@
+
+Pip install yt-dlp
+
+Cd into the folder 
+
+
+Check the log and see what the highest quality is by :
+
+yt-dlp -F "URL"
+
+Scratch command :
+
+yt-dlp -F "https://www.youtube.com/watch?v=ixLPADNTgBI"
+
+Then to download 
+yt-dlp -f "399" --merge-output-format mp4 "url"
+
+
+Note:
+313 the video quality + 140 is the audio quality ( yes you can only choose one if you want )
+
+
+Scratch command :
+
+
+yt-dlp -f "140" --merge-output-format mp4 "url"
+
+yt-dlp -f "140" --merge-output-format mp4 "https://www.youtube.com/watch?v=ZadBZsGy4EY"
+
+
+
+
