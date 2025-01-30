@@ -17,8 +17,7 @@ def download_video():
     url = input("Enter YouTube URL: ")
     # Get available formats
     subprocess.run(f"yt-dlp -F {url}", shell=True)
-    format_choice = 137+140
-    #input(f"Enter format code [default {CONFIG['default_quality']}]: ") or CONFIG['default_quality']
+    format_choice =input(f"Enter format code [default {CONFIG['default_quality']}] + to add values: ") or CONFIG['default_quality']
     
     subprocess.run(
         f"yt-dlp -f {format_choice} --merge-output-format mp4 "
