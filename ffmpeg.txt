@@ -1,0 +1,11 @@
+Videos at any height
+
+Blurry background 
+ffmpeg -i SnapTik_App_7371830597674765614-HD.mp4 -vf "scale=iw:10" output_video_4.mp4
+
+Strip of video
+ffmpeg -i SnapTik_App_7371830597674765614-HD.mp4 -vf "crop=iw:10:0:0" output_video_5.mp4
+
+
+
+REMIND ME TO TURN THIS INTO A PIPELINE COMMANDLINE SOFTWARE IN ORDER TO INCREASE EFFENCY 
