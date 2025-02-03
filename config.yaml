@@ -1,0 +1,6 @@
+default_formats:
+  video: 399
+  audio: 140
+ffmpeg_presets:
+  blur: "scale=iw:10"
+  strip: "crop=iw:10:0:0"
