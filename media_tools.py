@@ -1,6 +1,10 @@
 import subprocess
 import os
 from pathlib import Path
+import logging
+import re
+
+logging.basicConfig(level=logging.INFO, filename="media_tool.log")
 
 CONFIG = {
     'input_dir': 'input',
@@ -10,116 +14,125 @@ CONFIG = {
 }
 
 def ensure_dirs():
-    """Ensure that our necessary directories exist."""
-    for d in [CONFIG['input_dir'], CONFIG['output_dir'], CONFIG['download_dir']]:
-        Path(d).mkdir(exist_ok=True)
+    for d in CONFIG.values():
+        Path(d).mkdir(parents=True, exist_ok=True)
 
-def download_video():
-    """Download a YouTube video in the specified format."""
-    url = input("Enter YouTube URL: ")
-    
-    # Get available formats
-    subprocess.run(f"yt-dlp -F {url}", shell=True)
-    
-    format_choice = input(
-        f"Enter format code [default {CONFIG['default_quality']}] (you can add + if you want multiple): "
-    ) or CONFIG['default_quality']
-    
-    # Download the video based on chosen format
-    subprocess.run(
-        f"yt-dlp -f {format_choice} "
-        f"-o '{CONFIG['download_dir']}/%(title)s.%(ext)s' {url}",
-        shell=True
+def validate_youtube_url(url):
+    youtube_regex = re.compile(
+        r'(https?://)?(www\\.)?'
+        '(youtube|youtu|youtube-nocookie)\\.(com|be)/'
+        '((watch\\?.*v=)|embed/|v/)?([\\w-]+)'
     )
+    return youtube_regex.match(url) is not None
 
-def download_mp3():
-    """Download a YouTube video as an MP3 file."""
-    url = input("Enter YouTube URL: ")
-    
-    # Get available formats
-    subprocess.run(f"yt-dlp -F {url}", shell=True)
-    
-    format_choice = CONFIG['default_quality']
-    
-    # Download and extract audio to MP3
-    subprocess.run(
-        f"yt-dlp -f {format_choice} --extract-audio --audio-format mp3 "
-        f"-o '{CONFIG['download_dir']}/%(title)s.%(ext)s' {url}",
-        shell=True
-    )
+def download_video(url, format_choice=None):
+    if not validate_youtube_url(url):
+        logging.error("Invalid URL provided for video download.")
+        return False
 
-def process_videos():
-    """
-    List the videos in the 'downloads' folder,
-    allow user to pick one, then crop it using ffmpeg
-    according to the input start and end times.
-    """
-    files = os.listdir(CONFIG['download_dir'])
-    if not files:
-        print("No files found in downloads folder to process.")
-        return
+    format_choice = format_choice or CONFIG['default_quality']
+    command = [
+        "yt-dlp", "-f", format_choice,
+        "-o", os.path.join(CONFIG['download_dir'], "%(title)s.%(ext)s"), url
+    ]
 
-    print("\nFiles in downloads folder:")
-    for i, f in enumerate(files, start=1):
-        print(f"{i}. {f}")
-    
-    choice = input("\nSelect a file number to crop: ")
     try:
-        choice_index = int(choice) - 1
-        if choice_index < 0 or choice_index >= len(files):
-            print("Invalid file selection.")
-            return
-    except ValueError:
-        print("Invalid input.")
-        return
-    
-    selected_file = files[choice_index]
-    input_path = os.path.join(CONFIG['download_dir'], selected_file)
-    
-    # Ask user for the start time and end time
-    start_time = input("Enter start time in HH:MM:SS (e.g., 00:01:30): ")
-    end_time   = input("Enter end time in HH:MM:SS (e.g., 00:02:45): ")
-    
-    # Build the output file name
-    base_name, ext = os.path.splitext(selected_file)
+        subprocess.run(command, check=True)
+        logging.info(f"Video downloaded successfully from {url}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed downloading video: {e}")
+        return False
+
+def download_mp3(url):
+    if not validate_youtube_url(url):
+        logging.error("Invalid URL provided for MP3 download.")
+        return False
+
+    command = [
+        "yt-dlp",
+        "-f", CONFIG['default_quality'],
+        "--extract-audio",
+        "--audio-format", "mp3",
+        "-o", os.path.join(CONFIG['download_dir'], "%(title)s.%(ext)s"),
+        url
+    ]
+
+    try:
+        subprocess.run(command, check=True)
+        logging.info(f"MP3 downloaded successfully from {url}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed downloading MP3: {e}")
+        return False
+
+def process_video(input_filename, start_time, end_time):
+    input_path = os.path.join(CONFIG['input_dir'], input_filename)
+    base_name, ext = os.path.splitext(input_filename)
     cropped_filename = f"{base_name}_cropped{ext}"
     output_path = os.path.join(CONFIG['output_dir'], cropped_filename)
-    
-    # Run ffmpeg to crop the video
-    # -ss sets the start time, -to sets the end time,
-    # -c copy tries to copy without re-encoding (faster and no quality loss if the format supports it).
-    command = (
-        f'ffmpeg -i "{input_path}" '
-        f'-ss {start_time} -to {end_time} '
-        f'-c copy "{output_path}"'
-    )
-    print(f"\nRunning command:\n{command}\n")
-    
-    subprocess.run(command, shell=True)
-    print(f"Crop complete! Cropped video saved as: {output_path}")
+
+    command = [
+        "ffmpeg", "-i", input_path,
+        "-ss", start_time, "-to", end_time,
+        "-c:v", "copy", "-c:a", "copy",
+        output_path
+    ]
+
+    try:
+        subprocess.run(command, check=True)
+        logging.info(f"Cropped video saved as: {output_path}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error cropping video: {e}")
+        return False
+
+def list_video_files():
+    video_extensions = (".mov", ".mp4", ".avi", ".mkv", ".wmv", ".flv", ".webm")
+    return [
+        f for f in os.listdir(CONFIG['input_dir'])
+        if f.lower().endswith(video_extensions)
+    ]
 
 def main():
     ensure_dirs()
     while True:
         action = input(
             "\nMain Menu:\n"
-            "1. Download mp3\n"
+            "1. Download MP3\n"
             "2. Download Video\n"
-            "3. Process (Crop) Videos\n"
+            "3. Crop Any Video\n"
             "4. Exit\n> "
         )
-        
+
         if action == '1':
-            download_mp3()
+            url = input("Enter YouTube URL: ")
+            download_mp3(url)
         elif action == '2':
-            download_video()
+            url = input("Enter YouTube URL: ")
+            format_choice = input(f"Enter format [default {CONFIG['default_quality']}]: ") or CONFIG['default_quality']
+            download_video(url, format_choice)
         elif action == '3':
-            process_videos()
+            files = list_video_files()
+            if not files:
+                print("No video files found. Inside the input folder.")
+                continue
+
+            for idx, file in enumerate(files, 1):
+                print(f"{idx}. {file}")
+
+            file_choice = int(input("Select file number: ")) - 1
+            if 0 <= file_choice < len(files):
+                start_time = input("Enter start time (HH:MM:SS): ")
+                end_time = input("Enter end time (HH:MM:SS): ")
+                process_video(files[file_choice], start_time, end_time)
+            else:
+                print("Invalid selection.")
         elif action == '4':
-            print("Exiting script.")
+            print("Exiting.")
             break
         else:
-            print("Invalid selection. Please choose a valid number.")
+            print("Invalid option.")
 
 if __name__ == "__main__":
     main()
